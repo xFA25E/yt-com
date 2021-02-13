@@ -1,0 +1,9 @@
+* fix type in custom instances
+* write docs
+* run eldev
+* run flycheck
+* run bytecompiler
+* look for all functions
+  find requires
+
+  find cl-s

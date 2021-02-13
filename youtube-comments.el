@@ -329,13 +329,12 @@
 
 ;;;###autoload
 (defun youtube-comments (url)
-  (interactive "SYoutube (or invidious) url: ")
-  (youtube-comments-id
-   (ytcom-parse-id-from-url (read-string "Youtube (or invidious) url: "))))
+  (interactive "sYoutube (or invidious) url: ")
+  (youtube-comments-id (ytcom-parse-id-from-url url)))
 
 ;;;###autoload
 (defun youtube-comments-id (id)
-  (interactive "SYoutube video id: ")
+  (interactive "sYoutube video id: ")
   (ytcom-retrieve-title
    id
    (lambda (title)

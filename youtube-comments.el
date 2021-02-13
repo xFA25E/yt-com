@@ -33,6 +33,7 @@
 (require 'seq)
 (require 'subr-x)
 (require 'shr)
+(require 'ewoc)
 
 ;;;; TYPES
 

@@ -78,10 +78,7 @@
   :group 'applications)
 
 (defcustom youtube-comments-invidious-hosts
-  '(;; "invidious.namazso.eu"
-    "tube.connect.cafe" "ytprivate.com" "invidious.tube"
-    "vid.puffyan.us" "invidious.himiko.cloud" "invidious.048596.xyz"
-    "invidious.zee.li" "inv.skyn3t.in" "invidiou.site" "au.ytprivate.com")
+  '("invidio.us")
   "Invidious hosts."
   :group 'youtube-comments)
 

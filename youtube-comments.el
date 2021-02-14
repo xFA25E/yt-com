@@ -115,11 +115,7 @@
           (error "Invalid youtube url"))))))
 
 (defun ytcom-format-content (content padding)
-  (with-temp-buffer
-    (insert content)
-    (fill-region (point-min) (point-max) nil t)
-    (replace-regexp "^" padding nil (point-min) (point-max))
-    (buffer-substring (point-min) (point-max))))
+  (replace-regexp-in-string "^" padding content))
 
 (defun ytcom-comments-and-buttons-create (json)
   (seq-mapcat

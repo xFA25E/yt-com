@@ -348,10 +348,11 @@
               (youtube-comments-mode)
               (erase-buffer)
               (buffer-disable-undo)
+              (setq-local ytcom-id id)
               (let* ((ewoc (ewoc-create 'ytcom-draw-entity nil nil t))
                      (node (ewoc-enter-last ewoc (car entities))))
-                (setq-local ytcom-id id ytcom-ewoc ewoc)
-                (ytcom-draw-entities ewoc node (cdr entities)))))
+                (ytcom-draw-entities ewoc node (cdr entities))
+                (setq-local ytcom-ewoc ewoc))))
           (switch-to-buffer buffer)))
       title))))
 

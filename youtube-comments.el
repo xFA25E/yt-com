@@ -178,7 +178,8 @@
 
                       (urls (ytcom-retrieve-url urls callback :queue queue :error error))
                       (error (error "All urls returned an error.")))
-                   (kill-buffer current-buffer)))))))
+                   (kill-buffer current-buffer))))
+             nil t)))
 
 (defun ytcom-retrieve-json (method id query callback)
   (ytcom-retrieve-url
@@ -193,13 +194,16 @@
    :error t))
 
 (defun ytcom-retrieve-title (id callback)
-  (ytcom-retrieve-json "videos" id nil
+  (ytcom-retrieve-json "videos" id '(("fields" "title"))
                        (lambda (json)
                          (funcall callback (gethash "title" json)))))
 
 (defun ytcom-retrieve-entities (id continuation callback &optional title)
   (ytcom-retrieve-json
-   "comments" id (when continuation `(("continuation" ,continuation)))
+   "comments" id
+   (append
+    '(("fields" "commentCount,continuation,comments(author,authorThumbnails,authorId,content,published,likeCount,authorIsChannelOwner,creatorHeart,replies)"))
+    (when continuation `(("continuation" ,continuation))))
    (lambda (json)
      (funcall
       callback

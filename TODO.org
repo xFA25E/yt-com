@@ -1,4 +1,5 @@
 * fix type in custom instances
+* add various http checks for types json and image
 * write docs
 * run eldev
 * run flycheck

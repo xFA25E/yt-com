@@ -162,44 +162,44 @@
 
 ;;;;; NETWORK
 
-(cl-defun ytcom-retrieve-url ((url . urls) callback &optional queuep)
+(cl-defun ytcom-retrieve-url ((url . urls) callback &key queue error)
   (let ((url-queue-parallel-processes 1))
-    (funcall (if queuep #'url-queue-retrieve #'url-retrieve)
+    (funcall (if queue #'url-queue-retrieve #'url-retrieve)
              url
              (lambda (status)
-               (if (bound-and-true-p url-http-response-status)
-                   (let ((current-buffer (current-buffer)))
-                     (unwind-protect
-                         (if (and (/= 200 url-http-response-status) urls)
-                             (ytcom-retrieve-url urls callback queuep)
-                           (goto-char url-http-end-of-headers)
-                           (forward-char)
-                           (funcall callback))
-                       (kill-buffer current-buffer)))
-                 (setq-local temp-status status)
-                 (switch-to-buffer (current-buffer))
-                 (debug))))))
+               (let ((current-buffer (current-buffer)))
+                 (unwind-protect
+                     (cond
+                      ((and (bound-and-true-p url-http-response-status)
+                            (= 200 url-http-response-status))
+                       (goto-char url-http-end-of-headers)
+                       (forward-char)
+                       (funcall callback))
+
+                      (urls (ytcom-retrieve-url urls callback :queue queue :error error))
+                      (error (error "All urls returned an error.")))
+                   (kill-buffer current-buffer)))))))
 
 (defun ytcom-retrieve-json (method id query callback)
   (ytcom-retrieve-url
    (mapcar
     (lambda (host)
-      (let ((f (format "/api/v1/%s/%s?%s" method id (url-build-query-string query))))
+      (let ((f (concat "/api/v1/" method "/" id
+                       (when query
+                         (concat "?" (url-build-query-string query))))))
         (url-parse-make-urlobj "https" nil nil host nil f nil nil t)))
     youtube-comments-invidious-hosts)
-   (lambda () (funcall callback (json-parse-buffer)))))
+   (lambda () (funcall callback (json-parse-buffer)))
+   :error t))
 
 (defun ytcom-retrieve-title (id callback)
-  (ytcom-retrieve-json "videos" id '(("fields" "title"))
+  (ytcom-retrieve-json "videos" id nil
                        (lambda (json)
                          (funcall callback (gethash "title" json)))))
 
 (defun ytcom-retrieve-entities (id continuation callback &optional title)
   (ytcom-retrieve-json
-   "comments" id
-   `(("fields" "commentCount,continuation,comments(author,authorThumbnails,authorId,content,published,likeCount,authorIsChannelOwner,creatorHeart,replies)")
-     . ,(when continuation
-          `(("continuation" ,continuation))))
+   "comments" id (when continuation `(("continuation" ,continuation)))
    (lambda (json)
      (funcall
       callback
@@ -214,7 +214,7 @@
    (lambda ()
      (let* ((data (buffer-substring-no-properties (point) (point-max))))
        (funcall callback (create-image data nil t))))
-   t))
+   :queue t))
 
 ;;;;; DRAW
 

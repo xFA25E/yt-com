@@ -1,16 +1,33 @@
 #+TITLE: Yt-Com
 
-*Reliable* YouTube comments front-end for Emacs.  Reliable?  Yes.  Invidious
-instances are not very reliable.  They go down and fail to respond from time to
-time.  This package tries to mitigate this problem by using a *LIST* of
-invidious instances.  The more you have, the better.  It sequentially tries to
-request data from every invidious instance and returns as soon as it gets a
-response without an error.  Neat!
+*Reliable* YouTube comments front-end for Emacs.
+
+[[yt-com.gif]]
+
+* Usage
+  There are TWO entry points to this package.  ~yt-com~, which takes a YouTube
+  (or Invidious) URL. And, ~yt-com-id~, which takes just a video id.  The latter
+  might have a better use from code.  These are interactive commands!
+
+* Reliable?
+  Yes, this is what this package tries to achieve.  Invidious instances are not
+  very reliable.  They go down and fail to respond from time to time.  This
+  package tries to mitigate this problem by using a *LIST* of invidious
+  instances.  The more you have, the better.  It sequentially tries to request
+  data from every invidious instance and returns as soon as it gets a response
+  without an error.  And, of course, it is asynchronous!
 
 * Why only YouTube comments?
-  Why not a full-blown front-end for YouTube?  Well,
-  since I discovered that invidious instances work very well with only HTML
-  enabled, I just use EWW for browsing them.
+  Why not a full-blown front-end for YouTube?  Well, since I discovered that
+  invidious instances work very well with only HTML enabled, I just use EWW for
+  browsing them.  It dose require JavaScript for comments thou.
+
+* Why not contributing to [[https://github.com/gRastello/ytel][ytel/]][[https://github.com/spiderbit/ytdious][ytdious]] to add reliability?
+  Well, because I needed only comments!  And, I don't like adding a dependency
+  for what I'm not using.
+
+* Questions, bugs, contributions
+  Feel free to ask me any question, report bugs and send pull requests!
 
 * Todo
 ** Add types to custom variables

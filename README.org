@@ -7,8 +7,11 @@ invidious instances.  The more you have, the better.  It sequentially tries to
 request data from every invidious instance and returns as soon as it gets a
 response without an error.  Neat!
 
+Why only YouTube comments?  Why not a full-blown front-end for YouTube?  Well,
+since I discovered that invidious instances work very well with only HTML
+enabled, I just use EWW for browsing them.
 
-* TOD
+* Todo
 ** Add types to custom variables
 ** Add various HTTP checks for types JSON and image
 ** Write better docs
@@ -16,7 +19,5 @@ response without an error.  Neat!
 ** Run FlyMake
 ** Run byte-compiler
 ** Write dependencies
-   cl-*, seq?
+   cl-, seq?
 ** Add tests?
-
-#  LocalWords:  JSON Eldev FlyMake

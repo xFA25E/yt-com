@@ -1,5 +1,7 @@
 #+TITLE: Yt-Com
 
+*Invidious is broken again, replies don't work!*
+
 *Reliable* YouTube comments front-end for Emacs.
 
 [[yt-com.gif]]
@@ -48,3 +50,4 @@
 ** Write dependencies
    cl-, seq?
 ** Add tests?
+** to check for subclass you must use cl-typep

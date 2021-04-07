@@ -23,9 +23,52 @@
 
 ;;; Commentary:
 
+;; M-x yt-com
+
+;; It take a YouTube (or Invidious) video URL.
+
+;; M-x yt-com-id
+
+;; It takes a YouTube video ID.
+
 ;;; Code:
 
-;;;; REQUIRES
+;;;; CUSTOMIZE
+
+(defgroup yt-com nil
+  "YouTube comments front-end."
+  :group 'applications)
+
+(defcustom yt-com-invidious-hosts
+  '("invidio.us")
+  "A list of Invidious hosts that will be used to query data."
+  :type '(repeat :tag "Hosts" string)
+  :group 'yt-com)
+
+(defcustom yt-com-date-time-format "%Y-%m-%d %H:%M:%S"
+  "Format time string.
+See `format-time-string' function."
+  :type '(string :tag "Date-Time format")
+  :group 'yt-com)
+
+;;;;; FACES
+
+(defface yt-com-date-time-face
+  '((t :inherit font-lock-builtin-face))
+  "YouTube comment date-time face."
+  :group 'yt-com)
+
+(defface yt-com-likes-face
+  '((t :inherit font-lock-doc-face))
+  "YouTube comment likes face."
+  :group 'yt-com)
+
+(defface yt-com-owner-face
+  '((t :inherit hl-line))
+  "YouTube comment owner face."
+  :group 'yt-com)
+
+;;;; DEPENDENCIES
 
 (require 'url)
 (require 'url-queue)
@@ -36,326 +79,327 @@
 (require 'shr)
 (require 'ewoc)
 
-;;;; TYPES
-
-(cl-defstruct (ytcom-header (:constructor nil)
-                            (:constructor ytcom-header-create
-                                          (title comment-count))
-                            (:copier nil))
-  title comment-count)
-
-(cl-defstruct (ytcom-button (:constructor nil)
-                            (:constructor ytcom-button-create
-                                          (continuation &optional repliesp reply-count))
-                            (:copier nil))
-  continuation repliesp reply-count)
-
-(cl-defstruct (ytcom-comment (:constructor ytcom-comment-create) (:copier nil))
-  author-id
-  author
-  content
-  published
-  like-count
-  ownerp
-  heart
-  thumbnail-urls
-  (thumbnail nil)
-  (replyp nil))
-
 ;;;; VARIABLES
 
-(defvar youtube-comments-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "n") 'youtube-comments-next-button)
-    (define-key map (kbd "p") 'youtube-comments-previous-button)
-    map))
+(defvar-local yt-com--video-id nil)
 
-(defvar-local ytcom-id nil)
-(defvar-local ytcom-ewoc nil)
+(defvar-local yt-com--ewoc nil)
 
-;;;; CUSTOM
+;;;; EWOC WIDGETS
 
-(defgroup youtube-comments nil
-  "Youtube comments front-end."
-  :group 'applications)
+(defclass yt-com--button ()
+  ((continuation :initarg :continuation)))
 
-(defcustom youtube-comments-invidious-hosts
-  '("invidio.us")
-  "Invidious hosts."
-  :group 'youtube-comments)
+(defclass yt-com--replies-button (yt-com--button)
+  ((reply-count :initarg :reply-count :initform nil)))
 
-(defface youtube-comments-date-time-face
-  '((t :inherit font-lock-builtin-face))
-  ""
-  :group 'youtube-comments)
+(defclass yt-com--comment ()
+  ((author-id :initarg :author-id)
+   (author :initarg :author)
+   (content :initarg :content)
+   (published :initarg :published)
+   (like-count :initarg :like-count)
+   (ownerp :initarg :ownerp)
+   (heart :initarg :heart)
+   (thumbnail-urls :initarg :thumbnail-urls :initform nil)
+   (thumbnail :initarg :thumbnail :initform nil)
+   (padding :initform "")))
 
-(defface youtube-comments-likes-face
-  '((t :inherit font-lock-doc-face))
-  ""
-  :group 'youtube-comments)
+(defclass yt-com--reply (yt-com--comment)
+  ((padding :initform "|   ")))
 
-(defface youtube-comments-owner-face
-  '((t :inherit hl-line))
-  ""
-  :group 'youtube-comments)
+;;;; UTILS
 
-;;;; FUNCTIONS
+(defun yt-com--parse-thumbnail-urls (json-comment)
+  (let ((get-width (apply-partially #'gethash "width"))
+        (get-url (apply-partially #'gethash "url"))
+        (json-thumbnails (gethash "authorThumbnails" json-comment)))
+    (seq-map get-url (seq-sort-by get-width #'> json-thumbnails))))
 
-;;;;; UTILS
+(defun yt-com--parse-comment (json-comment &optional replyp)
+  (let* ((json-is-owner (gethash "authorIsChannelOwner" json-comment))
+         (ownerp (not (eq :false json-is-owner)))
+         (json-heart (gethash "creatorHeart" json-comment))
+         (heart (when json-heart (gethash "creatorName" json-heart))))
+    (funcall
+     (if replyp #'yt-com--reply #'yt-com--comment)
+     :author-id      (gethash "authorId" json-comment)
+     :author         (gethash "author" json-comment)
+     :content        (gethash "content" json-comment)
+     :published      (gethash "published" json-comment)
+     :like-count     (gethash "likeCount" json-comment)
+     :ownerp         ownerp
+     :heart          heart
+     :thumbnail-urls (yt-com--parse-thumbnail-urls json-comment))))
 
-(defun ytcom-parse-id-from-url (url)
-  (let ((url-object (url-generic-parse-url (string-trim url))))
-    (if (string-equal "youtu.be" (url-host url-object))
-        (substring (url-filename url-object) 1 12)
-      (pcase-let* ((`(,path . ,query) (url-path-and-query url-object))
-                   (query (url-parse-query-string query)))
-        (unless (string-equal "/watch" path)
-          (error "Invalid youtube url"))
-        (if-let ((id (assoc "v" query #'string-equal)))
-            (cadr id)
-          (error "Invalid youtube url"))))))
+(defun yt-com--parse-replies-button (json-comment)
+  (when-let ((json-replies (gethash "replies" json-comment)))
+    (yt-com--replies-button
+     :continuation (gethash "continuation" json-replies)
+     :reply-count  (gethash "replyCount" json-replies))))
 
-(defun ytcom-format-content (content padding)
-  (replace-regexp-in-string "^" padding content))
+(defun yt-com--parse-widgets (json-comments &optional repliesp)
+  (let ((parse (lambda (json-comment)
+                 (list (yt-com--parse-comment json-comment repliesp)
+                       (yt-com--parse-replies-button json-comment)))))
+    (seq-filter #'identity (seq-mapcat parse json-comments))))
 
-(defun ytcom-comments-and-buttons-create (json)
-  (seq-mapcat
-   (lambda (comment)
-     (cons
-      (ytcom-comment-create
-       :author-id (gethash "authorId" comment)
-       :author (gethash "author" comment)
-       :content (gethash "content" comment)
-       :published (gethash "published" comment)
-       :like-count (gethash "likeCount" comment)
-       :ownerp (not (eq :false (gethash "authorIsChannelOwner" comment)))
-       :heart (when-let ((heart (gethash "creatorHeart" comment)))
-                (gethash "creatorName" heart))
-       :thumbnail-urls (thread-last (gethash "authorThumbnails" comment)
-                         (seq-sort-by (apply-partially #'gethash "width") #'>)
-                         (seq-map (apply-partially #'gethash "url"))))
-      (when-let ((replies (gethash "replies" comment)))
-        (list (ytcom-button-create (gethash "continuation" replies)
-                                   t (gethash "replyCount" replies))))))
-   json))
-
-(defun ytcom-button-action (_)
+(defun yt-com--button-action (_)
   (message "Loading...")
-  (let* ((ewoc ytcom-ewoc)
+  (let* ((ewoc yt-com--ewoc)
          (node (ewoc-locate ewoc))
          (button (ewoc-data node))
-         (continuation (ytcom-button-continuation button))
-         (repliesp (ytcom-button-repliesp button)))
-    (ytcom-retrieve-entities
-     ytcom-id continuation
-     (lambda (entities)
-       (when repliesp
-         (dolist (entity entities)
-           (cond ((ytcom-comment-p entity)
-                  (setf (ytcom-comment-replyp entity) t))
-                 ((ytcom-button-p entity)
-                  (setf (ytcom-button-repliesp entity) t)))))
-       (let ((previous-node (ewoc-prev ewoc node)))
-         (with-current-buffer (ewoc-buffer ewoc)
-           (let ((inhibit-read-only t))
-             (ewoc-delete ewoc node)
-             (ytcom-draw-entities ewoc previous-node entities))))))))
 
-;;;;; NETWORK
+         (continuation (oref button continuation))
+         (repliesp (yt-com--replies-button-p button)))
 
-(cl-defun ytcom-retrieve-url ((url . urls) callback &key queue error)
-  (let ((url-queue-parallel-processes 1))
-    (funcall (if queue #'url-queue-retrieve #'url-retrieve)
-             url
-             (lambda (status)
-               (let ((current-buffer (current-buffer)))
-                 (unwind-protect
-                     (cond
-                      ((and (bound-and-true-p url-http-response-status)
-                            (= 200 url-http-response-status))
-                       (goto-char url-http-end-of-headers)
-                       (forward-char)
-                       (funcall callback))
+    (yt-com--retrieve-widgets
+     yt-com--video-id continuation repliesp
+     (lambda (widgets continuation comment-count)
+       (message "Comment count %s" comment-count)
+       (with-current-buffer (ewoc-buffer ewoc)
+         (let ((inhibit-read-only t))
+           (oset button continuation continuation)
 
-                      (urls (ytcom-retrieve-url urls callback :queue queue :error error))
-                      (error (error "All urls returned an error.")))
-                   (kill-buffer current-buffer))))
-             nil t)))
+           (when (and (yt-com--replies-button-p button)
+                      (oref button reply-count))
+             (let ((new-reply-count (- (oref button reply-count)
+                                       (seq-count #'yt-com--reply-p widgets))))
+               (when (< 0 new-reply-count)
+                 (oset button reply-count new-reply-count))))
 
-(defun ytcom-retrieve-json (method id query callback)
-  (ytcom-retrieve-url
-   (mapcar
-    (lambda (host)
-      (let ((f (concat "/api/v1/" method "/" id
-                       (when query
-                         (concat "?" (url-build-query-string query))))))
-        (url-parse-make-urlobj "https" nil nil host nil f nil nil t)))
-    youtube-comments-invidious-hosts)
+           (ewoc-invalidate ewoc node)
+           (yt-com--draw-widgets ewoc node widgets)))))))
+
+(defun yt-com--build-urls (method id query)
+  (let* ((query (when query (concat "?" (url-build-query-string query))))
+         (filename (concat "/api/v1/" method "/" id query)))
+    (mapcar
+     (lambda (host)
+       (url-parse-make-urlobj "https" nil nil host nil filename nil nil t))
+     yt-com-invidious-hosts)))
+
+;;;; NETWORK
+
+(defvar url-http-end-of-headers)
+(defun yt-com--retrieve-url (url cb &optional cberr)
+  (url-retrieve
+   url
+   (lambda (_status)
+     (let ((current-buffer (current-buffer)))
+       (unwind-protect
+           (cond ((and (bound-and-true-p url-http-response-status)
+                       (= 200 url-http-response-status))
+                  (goto-char url-http-end-of-headers)
+                  (forward-char)
+                  (funcall cb))
+                 (cberr
+                  (funcall cberr)))
+         (kill-buffer current-buffer))))
+   nil t))
+
+(cl-defun yt-com--retrieve-urls ((url . urls) cb &optional cberr)
+  (yt-com--retrieve-url
+   url cb
+   (lambda ()
+     (cond (urls (yt-com--retrieve-urls urls cb cberr))
+           (cberr (funcall cberr))))))
+
+(defun yt-com--retrieve-json (method id query callback)
+  (yt-com--retrieve-urls
+   (yt-com--build-urls method id query)
    (lambda () (funcall callback (json-parse-buffer)))
-   :error t))
+   (lambda () (error "All urls returned error"))))
 
-(defun ytcom-retrieve-title (id callback)
-  (ytcom-retrieve-json "videos" id '(("fields" "title"))
-                       (lambda (json)
-                         (funcall callback (gethash "title" json)))))
+(defun yt-com--retrieve-title (id cb)
+  (yt-com--retrieve-json
+   "videos" id '(("fields" "title"))
+   (lambda (json) (funcall cb (gethash "title" json)))))
 
-(defun ytcom-retrieve-entities (id continuation callback &optional title)
-  (ytcom-retrieve-json
-   "comments" id
-   (append
-    '(("fields" "commentCount,continuation,comments(author,authorThumbnails,authorId,content,published,likeCount,authorIsChannelOwner,creatorHeart,replies)"))
-    (when continuation `(("continuation" ,continuation))))
+(defun yt-com--retrieve-widgets (id continuation repliesp cb)
+  (yt-com--retrieve-json
+   "comments" id (when continuation `(("continuation" ,continuation)))
    (lambda (json)
      (funcall
-      callback
-      (append
-       (when title (list (ytcom-header-create title (gethash "commentCount" json))))
-       (ytcom-comments-and-buttons-create (gethash "comments" json))
-       (when-let ((c (gethash "continuation" json))) (list (ytcom-button-create c))))))))
+      cb
+      (yt-com--parse-widgets (gethash "comments" json) repliesp)
+      (gethash "continuation" json)
+      (gethash "commentCount" json)))))
 
-(defun ytcom-retrieve-image (urls callback)
-  (ytcom-retrieve-url
-   urls
-   (lambda ()
-     (let* ((data (buffer-substring-no-properties (point) (point-max))))
-       (funcall callback (create-image data nil t))))
-   :queue t))
+(defun yt-com--retrieve-images (urls cb cbafter)
+  (if (not urls)
+      (funcall cbafter)
+    (pcase-let ((`(,url . ,urls) urls))
+      (yt-com--retrieve-url
+       url
+       (lambda ()
+         (let* ((data (buffer-substring-no-properties (point) (point-max))))
+           (funcall cb (create-image data nil t)))
+         (yt-com--retrieve-images urls cb cbafter))
+       (lambda () (yt-com--retrieve-images urls cb cbafter))))))
 
-;;;;; DRAW
+;;;; DRAW
 
-(defun ytcom-draw-url (label url)
-  (insert-text-button label
-                      'follow-link t
-                      'mouse-face 'highlight
-                      'shr-url url
-                      'keymap shr-map))
+(defun yt-com--draw-url (label url)
+  (insert-text-button
+   label 'follow-link t 'mouse-face 'highlight 'shr-url url 'keymap shr-map))
 
-(defun ytcom-draw-button (label)
-  (insert-text-button label 'follow-link t 'action 'ytcom-button-action))
+(defun yt-com--draw-button (label)
+  (insert-text-button label 'follow-link t 'action 'yt-com--button-action))
 
-(defmethod ytcom-draw-entity ((header ytcom-header))
+(defun yt-com--draw-header (title id &optional comment-count)
+  (let ((url (format "https://www.youtube.com/watch?v=%s" id)))
+    (yt-com--draw-url title url))
   (insert "\n")
-  (ytcom-draw-url (ytcom-header-title header)
-                  (concat "https://www.youtube.com/watch?v=" ytcom-id))
-  (insert (format "\n%d comments\n" (ytcom-header-comment-count header))))
+  (when comment-count
+    (insert (number-to-string comment-count)
+            " comments\n")))
 
-(defmethod ytcom-draw-entity ((button ytcom-button))
-  (insert "\n")
-  (ytcom-draw-button
-   (if (ytcom-button-repliesp button)
-      (if-let ((reply-count (ytcom-button-reply-count button)))
-          (format "View %d replies" reply-count)
-        "Show more replies")
-     "Load more"))
+(defmethod yt-com--draw-widget :before (_)
   (insert "\n"))
 
-(defun ytcom-draw-author-url (comment)
-  (ytcom-draw-url (ytcom-comment-author comment)
-                  (concat "https://www.youtube.com/channel/"
-                          (ytcom-comment-author-id comment))))
+(defmethod yt-com--draw-widget :after (_)
+  (insert "\n"))
 
-(defun ytcom-draw-date-time (comment)
-  (let* ((published (ytcom-comment-published comment))
-         (time (seconds-to-time published))
-         (s (format-time-string "%Y-%m-%d %H:%M:%S" time)))
-    (insert (propertize s 'face 'youtube-comments-date-time-face))))
+(defmethod yt-com--draw-widget ((button yt-com--button))
+  (if (oref button continuation)
+      (yt-com--draw-button "Load more")
+    (insert "No more comments")))
 
-(defun ytcom-draw-likes (comment)
-  (let* ((likes (number-to-string (ytcom-comment-like-count comment)))
-         (s (concat likes " likes")))
-    (insert (propertize s 'face 'youtube-comments-likes-face))))
+(defmethod yt-com--draw-widget ((button yt-com--replies-button))
+  (if (oref button continuation)
+      (let ((count (or (oref button reply-count) "more")))
+        (yt-com--draw-button (format "Show %s replies" count)))
+    (insert "No more replies")))
 
-(defun ytcom-draw-owner (comment)
-  (when (ytcom-comment-ownerp comment)
-    (insert "  -  " (propertize "OWNER" 'face 'youtube-comments-owner-face))))
+(defun yt-com--draw-author-url (comment)
+  (let ((url (format "https://www.youtube.com/channel/%s"
+                     (oref comment author-id))))
+    (yt-com--draw-url (oref comment author) url)))
 
-(defun ytcom-draw-heart (comment)
-  (when-let (creator (ytcom-comment-heart comment))
-    (insert "\n")
-    (let ((s (concat creator " likes this comment")))
-      (insert (propertize s 'face 'youtube-comments-owner-face) "\n"))))
+(defun yt-com--draw-date-time (comment)
+  (let* ((time (seconds-to-time (oref comment published)))
+         (s (format-time-string yt-com-date-time-format time)))
+    (insert (propertize s 'face 'yt-com-date-time-face))))
 
-(defmethod ytcom-draw-entity ((comment ytcom-comment))
-  (let ((padding (if (ytcom-comment-replyp comment) "|   " "")))
-    (insert padding "\n" padding)
-    (if-let ((thumbnail (ytcom-comment-thumbnail comment)))
+(defun yt-com--draw-likes (comment)
+  (let ((s (format "%s likes" (oref comment like-count))))
+    (insert (propertize s 'face 'yt-com-likes-face))))
+
+(defun yt-com--draw-owner (comment)
+  (when (oref comment ownerp)
+    (insert "  -  " (propertize "OWNER" 'face 'yt-com-owner-face))))
+
+(defun yt-com--draw-heart (comment)
+  (when-let ((creator (oref comment heart)))
+    (let ((s (format "\n%s likes this comment" creator)))
+      (insert (propertize s 'face 'yt-com-owner-face)))))
+
+(defmethod yt-com--draw-widget ((comment yt-com--comment))
+  (let ((padding (oref comment padding)))
+    (insert padding)
+    (if-let ((thumbnail (oref comment thumbnail)))
         (insert-image thumbnail)
       (insert "*"))
     (insert " ")
-    (ytcom-draw-author-url comment)
+    (yt-com--draw-author-url comment)
     (insert "  -  ")
-    (ytcom-draw-date-time comment)
+    (yt-com--draw-date-time comment)
     (insert "  -  ")
-    (ytcom-draw-likes comment)
-    (ytcom-draw-owner comment)
-    (insert "\n" (ytcom-format-content (ytcom-comment-content comment) padding) "\n")
-    (ytcom-draw-heart comment)))
+    (yt-com--draw-likes comment)
+    (yt-com--draw-owner comment)
+    (let ((content (replace-regexp-in-string
+                    "^" padding (oref comment content))))
 
-(defun ytcom-draw-thumbnail (ewoc node)
+      (insert "\n" content))
+    (yt-com--draw-heart comment)))
+
+(defun yt-com--draw-thumbnail (ewoc node &optional nodes)
   (let* ((comment (ewoc-data node))
-         (urls (ytcom-comment-thumbnail-urls comment)))
-    (ytcom-retrieve-image
+         (urls (oref comment thumbnail-urls)))
+    (yt-com--retrieve-images
      urls
      (lambda (image)
-       (setf (ytcom-comment-thumbnail comment) image)
+       (oset comment thumbnail image)
        (with-current-buffer (ewoc-buffer ewoc)
          (let ((inhibit-read-only t))
-           (ewoc-invalidate ewoc node)))))))
+           (ewoc-invalidate ewoc node))))
+     (lambda ()
+       (when nodes
+         (yt-com--draw-thumbnail ewoc (car nodes) (cdr nodes)))))))
 
-(defun ytcom-draw-entities (ewoc node entities)
+(defun yt-com--draw-widgets (ewoc node widgets)
   (let ((nodes nil))
-    (dolist (entity entities)
-      (setq node (ewoc-enter-after ewoc node entity))
-      (when (ytcom-comment-p entity)
-        (push node nodes)))
-    (dolist (node (nreverse nodes))
-      (ytcom-draw-thumbnail ewoc node))))
+    (dolist (widget widgets)
+      (let ((new-node (ewoc-enter-before ewoc node widget)))
+        (when (cl-typep new-node 'yt-com--comment)
+          (push new-node nodes))))
+    (when nodes
+      (let ((nodes (nreverse nodes)))
+        (yt-com--draw-thumbnail ewoc (car nodes) (cdr nodes))))))
 
 ;;;; COMMANDS
 
-(defun youtube-comments-next-button ()
+(defun yt-com-next-button ()
   (interactive)
   (when-let ((marker (next-button (point))))
     (goto-char marker)
     (set-marker marker nil)))
 
-(defun youtube-comments-previous-button ()
+(defun yt-com-previous-button ()
   (interactive)
   (when-let ((marker (previous-button (point))))
     (goto-char marker)
     (set-marker marker nil)))
 
-(define-derived-mode youtube-comments-mode special-mode "Youtube-Comments"
-  :group 'youtube-comments)
+(define-derived-mode yt-com-mode special-mode "Yt-Com"
+  :group 'yt-com)
 
 ;;;###autoload
-(defun youtube-comments (url)
+(defun yt-com (url)
   (interactive "sYoutube (or invidious) url: ")
-  (youtube-comments-id (ytcom-parse-id-from-url url)))
+  (pcase (url-generic-parse-url (string-trim url))
+    ((cl-struct url (host "youtu.be") filename)
+     (substring filename 1 12))
+
+    ((app url-path-and-query `("/watch" . ,(app url-parse-query-string query)))
+     (if-let ((id (cadr (assoc "v" query))))
+         (yt-com-id id)
+       (user-error "Invalid url")))
+
+    (_ (user-error "Invalid url"))))
 
 ;;;###autoload
-(defun youtube-comments-id (id)
+(defun yt-com-id (id)
   (interactive "sYoutube video id: ")
-  (ytcom-retrieve-title
+  (yt-com--retrieve-title
    id
    (lambda (title)
-     (ytcom-retrieve-entities
-      id nil
-      (lambda (entities)
-        (let ((buffer (get-buffer-create "*Youtube-Comments*")))
+     (yt-com--retrieve-widgets
+      id nil nil
+      (lambda (widgets continuation comment-count)
+        (let ((buffer (get-buffer-create "*Yt-Com*")))
           (with-current-buffer buffer
             (let ((inhibit-read-only t))
               (kill-all-local-variables)
-              (youtube-comments-mode)
+              (yt-com-mode)
               (erase-buffer)
               (buffer-disable-undo)
-              (setq-local ytcom-id id)
-              (let* ((ewoc (ewoc-create 'ytcom-draw-entity nil nil t))
-                     (node (ewoc-enter-last ewoc (car entities))))
-                (ytcom-draw-entities ewoc node (cdr entities))
-                (setq-local ytcom-ewoc ewoc))))
-          (switch-to-buffer buffer)))
-      title))))
+              (setq-local yt-com--video-id id)
+              (let* ((header (with-temp-buffer
+                               (print (yt-com--draw-header title id comment-count))
+                               (buffer-substring (point-min) (point-max))))
+                     (ewoc (ewoc-create 'yt-com--draw-widget header nil t))
+                     (node (ewoc-enter-last
+                            ewoc (yt-com--button :continuation continuation))))
+                (yt-com--draw-widgets ewoc node widgets)
+                (setq-local yt-com--ewoc ewoc))))
+          (switch-to-buffer buffer)))))))
+
+;;;; BINDS
+
+(define-key yt-com-mode-map (kbd "n") 'yt-com-next-button)
+(define-key yt-com-mode-map (kbd "p") 'yt-com-previous-button)
 
 (provide 'yt-com)
 ;;; yt-com.el ends here

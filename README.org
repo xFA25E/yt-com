@@ -5,9 +5,18 @@
 [[yt-com.gif]]
 
 * Usage
-  There are TWO entry points to this package.  ~yt-com~, which takes a YouTube
-  (or Invidious) URL. And, ~yt-com-id~, which takes just a video id.  The latter
-  might have a better use from code.  These are interactive commands!
+  #+begin_src emacs-lisp
+  M-x yt-com
+  #+end_src
+
+  *OR*
+
+  #+begin_src emacs-lisp
+  M-x yt-com-id
+  #+end_src
+
+  ~yt-com~ takes a YouTube (or Invidious) URL of a video.  ~yt-com-id~ takes
+  just a video id.  The latter might be better suitable for Emacs Lisp code.
 
 * Reliable?
   Yes, this is what this package tries to achieve.  Invidious instances are not

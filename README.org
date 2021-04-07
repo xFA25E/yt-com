@@ -1,0 +1,22 @@
+#+TITLE: Yt-Com
+
+*Reliable* YouTube comments front-end for Emacs.  Reliable?  Yes.  Invidious
+instances are not very reliable.  They go down and fail to respond from time to
+time.  This package tries to mitigate this problem by using a *LIST* of
+invidious instances.  The more you have, the better.  It sequentially tries to
+request data from every invidious instance and returns as soon as it gets a
+response without an error.  Neat!
+
+
+* TOD
+** Add types to custom variables
+** Add various HTTP checks for types JSON and image
+** Write better docs
+** Run Eldev
+** Run FlyMake
+** Run byte-compiler
+** Write dependencies
+   cl-*, seq?
+** Add tests?
+
+#  LocalWords:  JSON Eldev FlyMake

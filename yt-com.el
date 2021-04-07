@@ -1,9 +1,12 @@
-;;; youtube-comments.el --- Youtube comments front-end  -*- lexical-binding: t; -*-
+;;; yt-com.el --- Reliable YouTube comments front-end  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2021  Valeriy Litkovskyy
 
-;; Author: Valeriy Litkovskyy <>
-;; Keywords: multimedia
+;; Author: Valeriy Litkovskyy <vlr.ltkvsk@protonmail.com>
+;; Version: 0.1.0
+;; Keywords: comm, data, games, hypermedia, mouse, multimedia
+;; URL: https://github.com/xFA25E/youtube-comments
+;; Package-Requires: ((emacs "25.1"))
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -19,8 +22,6 @@
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-
-;;
 
 ;;; Code:
 
@@ -356,5 +357,5 @@
           (switch-to-buffer buffer)))
       title))))
 
-(provide 'youtube-comments)
-;;; youtube-comments.el ends here
+(provide 'yt-com)
+;;; yt-com.el ends here

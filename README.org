@@ -2,6 +2,8 @@
 
 *Invidious is broken again, replies don't work!*
 
+*Reliability is a lie :(*
+
 *Reliable* YouTube comments front-end for Emacs.
 
 [[yt-com.gif]]

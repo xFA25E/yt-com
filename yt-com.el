@@ -446,6 +446,7 @@ NODE.  EWOC is ewoc data of Yt-Com buffer."
   (with-silent-modifications (erase-buffer))
   (setq yt-com--ewoc (ewoc-create #'yt-com--draw)))
 
+;;;###autoload
 (defun yt-com (url-or-id)
   "View comments of video with URL-OR-ID."
   (interactive "sYoutube (or invidious) video url or id: ")

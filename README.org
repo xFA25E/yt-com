@@ -1,9 +1,5 @@
 #+TITLE: Yt-Com
 
-*Invidious is broken again, replies don't work!*
-
-*Reliability is a lie :(*
-
 *Reliable* YouTube comments front-end for Emacs.
 
 [[yt-com.gif]]
@@ -13,27 +9,20 @@
   M-x yt-com
   #+end_src
 
-  *OR*
-
-  #+begin_src emacs-lisp
-  M-x yt-com-id
-  #+end_src
-
-  ~yt-com~ takes a YouTube (or Invidious) URL of a video.  ~yt-com-id~ takes
-  just a video id.  The latter might be better suitable for Emacs Lisp code.
+  ~yt-com~ takes a YouTube (or Invidious) URL or ID of a video.
 
 * Reliable?
   Yes, this is what this package tries to achieve.  Invidious instances are not
   very reliable.  They go down and fail to respond from time to time.  This
-  package tries to mitigate this problem by using a *LIST* of invidious
-  instances.  The more you have, the better.  It sequentially tries to request
-  data from every invidious instance and returns as soon as it gets a response
-  without an error.  And, of course, it is asynchronous!
+  package tries to mitigate this problem by querying a *LIST* of invidious
+  instances.  It sequentially tries to request data from every invidious
+  instance and returns as soon as it gets a response without an error.  And, of
+  course, it is asynchronous!
 
 * Why only YouTube comments?
   Why not a full-blown front-end for YouTube?  Well, since I discovered that
-  invidious instances work very well with only HTML enabled, I just use EWW for
-  browsing them.  It dose require JavaScript for comments thou.
+  invidious instances work very well with only HTML enabled, I just use /EWW/
+  for browsing them.  It dose require JavaScript for comments tho.
 
 * Why not contributing to [[https://github.com/gRastello/ytel][ytel/]][[https://github.com/spiderbit/ytdious][ytdious]] to add reliability?
   Well, because I needed only comments!  And, I don't like adding a dependency
@@ -41,15 +30,3 @@
 
 * Questions, bugs, contributions
   Feel free to ask me any question, report bugs and send pull requests!
-
-* Todo
-** Add types to custom variables
-** Add various HTTP checks for types JSON and image
-** Write better docs
-** Run Eldev
-** Run FlyMake
-** Run byte-compiler
-** Write dependencies
-   cl-, seq?
-** Add tests?
-** to check for subclass you must use cl-typep

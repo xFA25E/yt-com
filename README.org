@@ -24,9 +24,5 @@
   invidious instances work very well with only HTML enabled, I just use /EWW/
   for browsing them.  It dose require JavaScript for comments tho.
 
-* Why not contributing to [[https://github.com/gRastello/ytel][ytel/]][[https://github.com/spiderbit/ytdious][ytdious]] to add reliability?
-  Well, because I needed only comments!  And, I don't like adding a dependency
-  for what I'm not using.
-
 * Questions, bugs, contributions
   Feel free to ask me any question, report bugs and send pull requests!

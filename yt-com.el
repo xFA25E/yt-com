@@ -408,9 +408,11 @@ buffer-local variable."
   "Subroutine of `yt-com--load-more-comments'.
 Add new COMMENTS to screen.  Update CONTINUATION of \"Load more\"
 button.  EWOC is the ewoc data of Yt-Com buffer."
-  (let* ((enter-last (apply-partially #'ewoc-enter-last ewoc))
+  (let* ((position (with-current-buffer (ewoc-buffer ewoc) (point)))
+         (enter-last (apply-partially #'ewoc-enter-last ewoc))
          (nodes (seq-map enter-last comments))
          (header (car (ewoc-get-hf ewoc))))
+    (with-current-buffer (ewoc-buffer ewoc) (goto-char position))
     (ewoc-set-hf ewoc header (yt-com--buffer-footer continuation))
     (yt-com--get-thumbnails comments #'yt-com--invalidate ewoc nodes)))
 

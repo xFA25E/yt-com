@@ -42,6 +42,10 @@
 
 ;;;; VARIABLES
 
+(defvar yt-com--invidious-hosts-cache nil
+  "Cache for invidious hosts.
+Has the form of (EXPIRE-TIME . HOSTS).")
+
 (defvar-local yt-com--ewoc nil
   "Ewoc data of Yt-Com buffer.")
 
@@ -98,7 +102,7 @@ any link with the right path to video id
    (concat "/api/v1/" method "/" id "?" (url-build-query-string params))
    nil nil t))
 
-(defun yt-com-invidious-hosts ()
+(defun yt-com-get-invidious-hosts ()
   "Retrieve invidious hosts ordered by health."
   (let ((parse-entry
          (lambda (entry)
@@ -120,6 +124,20 @@ any link with the right path to video id
       (delq nil)
       (seq-sort-by #'cdr #'>)
       (seq-map #'car))))
+
+(defun yt-com-invidious-hosts ()
+  "Get invidious hosts from cache or retrieve them."
+  (pcase yt-com--invidious-hosts-cache
+    ((pred null)
+     (let ((expire-time (time-add nil (* 60 60 24)))
+           (hosts (yt-com-get-invidious-hosts)))
+       (setq yt-com--invidious-hosts-cache (cons expire-time hosts))
+       hosts))
+    ((seq expire-time &rest hosts)
+     (if (time-less-p nil expire-time)
+         hosts
+       (setq yt-com--invidious-hosts-cache nil)
+       (yt-com-invidious-hosts)))))
 
 (defun yt-com--comment-cache (comment)
   "Get COMMENT cache."

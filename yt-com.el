@@ -4,9 +4,9 @@
 
 ;; Author: Valeriy Litkovskyy <vlr.ltkvsk@protonmail.com>
 ;; Keywords: comm, data, games, hypermedia, mouse, multimedia
-;; Version: 1.0.0
+;; Version: 1.0.1
 ;; URL: https://github.com/xFA25E/yt-com
-;; Package-Requires: ((emacs "27.1"))
+;; Package-Requires: ((emacs "28.1"))
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -294,16 +294,6 @@ CBARGS afterwards."
 
 ;;;; DRAW - Routines that display data on screen
 
-(defun yt-com--draw-url (label url)
-  "Draw a link on screen with LABEL and URL."
-  (insert-text-button label 'shr-url url 'keymap shr-map
-                      'follow-link t 'mouse-face 'highlight))
-
-(defun yt-com--draw-button (label action &rest properties)
-  "Draw a button with LABEL and ACTION.
-Apply additional PROPERTIES."
-  (apply #'insert-text-button label 'follow-link t 'action action properties))
-
 (defun yt-com--draw-header (comment)
   "Draw COMMENT header on screen."
   (pcase-let* ((cache (yt-com--comment-cache comment))
@@ -317,14 +307,12 @@ Apply additional PROPERTIES."
                         ("creatorHeart" (map ("creatorName" heart))))
                    comment))
         (setq header
-              (with-temp-buffer
-                (insert " ")
-                (yt-com--draw-url author (concat "https://youtube.com" author-url))
-                (insert " - " (propertize published-text 'face 'yt-com-time-face))
-                (insert " - " (propertize (number-to-string like-count) 'face 'yt-com-like-face))
-                (when heart (insert " " (propertize heart 'face 'yt-com-owner-face)))
-                (when ownerp (insert " - " (propertize "OWNER" 'face 'yt-com-owner-face)))
-                (buffer-string))))
+              (concat
+               " " (button-buttonize author #'browse-url (concat "https://youtube.com" author-url))
+               " - " (propertize published-text 'face 'yt-com-time-face)
+               " - " (propertize (number-to-string like-count) 'face 'yt-com-like-face)
+               (when heart (concat " " (propertize heart 'face 'yt-com-owner-face)))
+               (when ownerp (concat " - " (propertize "OWNER" 'face 'yt-com-owner-face))))))
       (map-put! cache "header" header))
     (insert header)))
 
@@ -336,9 +324,8 @@ Apply additional PROPERTIES."
       (pcase-let (((map ("contentHtml" content-html)) comment))
         (setq content
               (with-temp-buffer
-                (let ((start (point)))
-                  (insert "<base href=\"https://youtube.com\"><p>" content-html "</p>")
-                  (shr-render-region start (point)))
+                (insert "<base href=\"https://youtube.com\"><p>" content-html "</p>")
+                (shr-render-region (point-min) (point-max))
                 (buffer-string))))
       (map-put! cache "content" content))
     (insert content)))
@@ -359,29 +346,26 @@ Apply additional PROPERTIES."
           (yt-com--draw reply))))
     (when continuation
       (insert "\n")
-      (yt-com--draw-button
+      (insert-text-button
        (format "Show %d replies" (- reply-count (length replies)))
-       #'yt-com--load-more-replies 'continuation continuation)
+       'action #'yt-com--load-more-replies
+       'continuation continuation)
       (insert "\n"))))
 
 (defun yt-com--buffer-header (id title comment-count)
   "Return a string with Yt-Com buffer header.
 It's a link with TITLE that leads to video with ID.  Display
 COMMENT-COUNT below."
-  (with-temp-buffer
-    (yt-com--draw-url title (concat "https://www.youtube.com/watch?v=" id))
-    (insert "\n" (number-to-string comment-count) " comments\n")
-    (buffer-string)))
+  (let ((link (concat "https://www.youtube.com/watch?v=" id)))
+    (concat (button-buttonize title #'browse-url link)
+            (format "\n%d comments\n" comment-count))))
 
 (defun yt-com--buffer-footer (&optional continuation)
   "Return a string with Yt-Com buffer footer.
 It's a button that loads more comments.  Use CONTINUATION to make
 a request."
   (if continuation
-      (with-temp-buffer
-        (yt-com--draw-button "Load more" #'yt-com--load-more-comments
-                             'continuation continuation)
-        (buffer-string))
+      (button-buttonize "Load more" #'yt-com--load-more-comments continuation)
     "No more comments"))
 
 ;;;; ACTIONS - Routines of all possible actions that Yt-Com is capable of
@@ -416,9 +400,9 @@ buffer-local variable."
 
 ;;;;; LOAD MORE COMMENTS - Button action that fetches next page of comments
 
-(defun yt-com--load-more-comments (button)
-  "Act on BUTTON to load more comments."
-  (yt-com--get-comments yt-com--id (button-get button 'continuation)
+(defun yt-com--load-more-comments (continuation)
+  "Use CONTINUATION to load more comments."
+  (yt-com--get-comments yt-com--id continuation
                         #'yt-com--post-load-more-comments
                         yt-com--ewoc))
 
@@ -439,7 +423,7 @@ button.  EWOC is the ewoc data of Yt-Com buffer."
 (defun yt-com--load-more-replies (button)
   "Act on BUTTON to load more replies."
   (let ((continuation (button-get button 'continuation))
-        (node (ewoc-locate yt-com--ewoc)))
+        (node (ewoc-locate yt-com--ewoc button)))
     (yt-com--get-comments yt-com--id continuation
                           #'yt-com--post-load-more-replies
                           yt-com--ewoc node)))
@@ -464,7 +448,8 @@ NODE.  EWOC is ewoc data of Yt-Com buffer."
   :group 'yt-com
   (buffer-disable-undo)
   (with-silent-modifications (erase-buffer))
-  (setq yt-com--ewoc (ewoc-create #'yt-com--draw)))
+  (setq yt-com--ewoc (ewoc-create #'yt-com--draw))
+  (button-mode))
 
 ;;;###autoload
 (defun yt-com (url-or-id)
